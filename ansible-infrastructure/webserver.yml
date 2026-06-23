@@ -1,0 +1,61 @@
+---
+- name: Configure Web Server on Server A
+  hosts: webservers
+  become: true
+  tasks:
+    - name: Install httpd, firewalld, and policycoreutils-python-utils
+      ansible.builtin.dnf:
+        name:
+          - httpd
+          - firewalld
+          - policycoreutils-python-utils
+        state: present
+
+    - name: Start and enable firewalld service
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Permit traffic on port 89/tcp in firewalld
+      ansible.posix.firewalld:
+        port: 89/tcp
+        permanent: true
+        immediate: true
+        state: enabled
+
+    - name: Allow Apache to listen on port 89 (SELinux)
+      community.general.seport:
+        ports: 89
+        proto: tcp
+        setype: http_port_t
+        state: present
+
+    - name: Configure Apache to listen on port 89
+      ansible.builtin.lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^Listen '
+        line: 'Listen 89'
+        state: present
+      notify: Restart httpd
+
+    - name: Create index.html with welcome message
+      ansible.builtin.copy:
+        content: "Welcome to Web-server, Created by Mathew K Cheriyan\n"
+        dest: /var/www/html/index.html
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart httpd
+
+    - name: Start and enable httpd service
+      ansible.builtin.systemd:
+        name: httpd
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Restart httpd
+      ansible.builtin.systemd:
+        name: httpd
+        state: restarted
